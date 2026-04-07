@@ -1,6 +1,7 @@
 import telebot
 from flask import Flask
 from threading import Thread
+from datetime import datetime # Добавил для времени
 
 # Настройки
 MY_ID = 8337438678 
@@ -11,57 +12,52 @@ user_data = {}
 
 @app.route('/')
 def home():
-    return "Бот запущен!"
+    return "Бот для постов активен!"
 
 def run():
     app.run(host='0.0.0.0', port=8080)
 
-# Команда /start
 @bot.message_handler(commands=['start'])
 def start(message):
-    # Очищаем данные пользователя при перезапуске
     user_data[message.chat.id] = {} 
-    bot.send_message(message.chat.id, "👋 Привет! Чтобы сделать пост, пришли мне Ник пользователя.")
+    bot.send_message(message.chat.id, "👋 Начинаем оформление поста.\n\n👤 Пришли **Ник** нарушителя:")
     bot.register_next_step_handler(message, get_nick)
 
-# Шаг 1: Получаем Ник
 def get_nick(message):
-    if message.text == '/start':
-        return start(message) # Сброс, если ввели /start
-    
-    user_data[message.chat.id] = {'nick': message.text}
-    bot.send_message(message.chat.id, "✅ Принято. Теперь пришли его ID:")
-    bot.register_next_step_handler(message, get_id)
-
-# Шаг 2: Получаем ID
-def get_id(message):
-    if message.text == '/start':
-        return start(message)
-    
-    user_data[message.chat.id]['id_user'] = message.text
-    bot.send_message(message.chat.id, "✅ Записал. А теперь опиши, что он сделал:")
+    if message.text == '/start': return start(message)
+    user_data[message.chat.id]['nick'] = message.text
+    bot.send_message(message.chat.id, "📝 Теперь опиши, **что он сделал**:")
     bot.register_next_step_handler(message, get_action)
 
-# Шаг 3: Получаем описание и отправляем
 def get_action(message):
-    if message.text == '/start':
-        return start(message)
+    if message.text == '/start': return start(message)
     
     chat_id = message.chat.id
     user_data[chat_id]['action'] = message.text
     data = user_data[chat_id]
     
+    # Моя добавка: автоматическая дата и статус
+    current_time = datetime.now().strftime("%d.%m.%Y %H:%M")
+    
     post_text = (
-        f"📢 Новый пост!\n\n"
-        f"👤 Ник: {data['nick']}\n"
-        f"🆔 ID: {data['id_user']}\n"
-        f"📝 Что сделал: {data['action']}\n\n"
-        f"Отправил: @{message.from_user.username or 'без юзернейма'}"
+        f"🚨 **НОВЫЙ ПОСТ В ОЧЕРЕДЬ** 🚨\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"👤 **Нарушитель:** {data['nick']}\n"
+        f"📜 **Суть:** {data['action']}\n"
+        f"📅 **Дата фиксации:** {current_time}\n"
+        f"⚙️ **Статус:** Ожидает проверки\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"👤 **Отправил:** @{message.from_user.username or 'скрыто'}"
     )
     
-    # Убрал Markdown, чтобы бот не падал из-за спецсимволов
-    bot.send_message(MY_ID, post_text) 
-    bot.send_message(chat_id, "🚀 Спасибо! Твой отчет отправлен админу.")
+    # Пытаемся отправить сообщение ТЕБЕ
+    try:
+        bot.send_message(MY_ID, post_text, parse_mode='Markdown')
+        bot.send_message(chat_id, "✅ Готово! Твой пост улетел админу.")
+    except Exception as e:
+        # Если Markdown сломается, отправим обычным текстом
+        bot.send_message(MY_ID, post_text.replace('*', ''))
+        bot.send_message(chat_id, "🚀 Пост отправлен (упрощенная версия).")
 
 def keep_alive():
     t = Thread(target=run)
@@ -70,3 +66,4 @@ def keep_alive():
 if __name__ == "__main__":
     keep_alive()
     bot.infinity_polling()
+    
